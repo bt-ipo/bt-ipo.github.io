@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Consulta de Matrícula</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background-color: #eef1f4;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Cabeçalho dividido em duas metades (50% / 50%) */
+  .form-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    background: #f8f9fa;
+    padding: 10px 8px;
+    border-bottom: 1px solid #ddd;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    box-sizing: border-box;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  /* Metade Esquerda: Formulário alinhado ao início */
+  .left-section {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 20px;
+  }
+
+  /* Metade Direita: Botões Auxiliares Centrados com a Frame Direita */
+  .right-section {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: 100%;
+  }
+
+  /* Zona Central Absoluta: Estado do Seguro */
+  .center-status-container {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 11;
+  }
+
+  .input-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  label {
+    font-weight: bold;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  input {
+    padding: 8px;
+    font-size: 14px;
+    width: 70px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    outline: none;
+    transition: 0.3s;
+    text-transform: uppercase;
+  }
+  input:focus {
+    border-color: #00796b;
+    box-shadow: 0 0 4px rgba(0, 121, 107, 0.4);
+  }
+
+  /* Botão principal (Consultar) */
+  button {
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: bold;
+    background-color: #3d63af;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.3s;
+    white-space: nowrap;
+  }
+  button:hover {
+    background-color: #0d1b60;
+  }
+
+  /* Botões Auxiliares da Direita */
+  .aux-btn {
+    background-color: #4e6df2;
+  }
+  .aux-btn:hover {
+    background-color: #0d1b60;
+  }
+
+  /* Indicador do Estado do Seguro com Fundo Colorido no Centro */
+  .seguro-status-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    padding: 3px 14px;
+    min-width: 160px;
+    height: 38px;
+    box-sizing: border-box;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+    border: 1px solid transparent;
+  }
+
+  /* Estados de Fundo */
+  .seguro-status-container.idle {
+    background-color: #e2e8f0;
+    border-color: #cbd5e1;
+    color: #475569;
+  }
+  .seguro-status-container.ok {
+    background-color: #00aa00; /* Verde Ativo */
+    border-color: #15803d;
+    color: #ffffff;
+  }
+  .seguro-status-container.no {
+    background-color: #dc2626; /* Vermelho Sem Seguro */
+    border-color: #b91c1c;
+    color: #ffffff;
+  }
+  .seguro-status-container.warn {
+    background-color: #d97706; /* Laranja/Amarelo Aviso e Aguardar */
+    border-color: #b45309;
+    color: #ffffff;
+  }
+
+  .seguro-badge {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    line-height: 1.1;
+    color: inherit;
+  }
+
+  .seguro-rate-info {
+    font-size: 9px;
+    margin-top: 1px;
+    white-space: nowrap;
+    font-weight: 600;
+    opacity: 0.95;
+    color: inherit;
+  }
+
+  /* Botão Ecrã Inteiro Fixado na Extremidade Direita */
+  .fullscreen-btn {
+    position: absolute;
+    right: 15px;
+    background-color: #3d63af;
+    padding: 8px 12px;
+    border-radius: 6px;
+  }
+  .fullscreen-btn:hover {
+    background-color: #0d1b60;
+  }
+
+  /* Área Geral das Metades Inferiores */
+  .iframe-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 8px;
+    background: #fafafa;
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  /* Contentores individuais para gerir o Spinner por trás da Iframe */
+  .iframe-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #f1f3f4;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #ccc;
+  }
+
+  iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Estilo do Spinner / Carregamento de Performance */
+  .loading-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #f8f9fa;
+    color: #5f6368;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 1;
+  }
+
+  .spinner {
+    width: 35px;
+    height: 35px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #00796b;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 12px;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* Toast de Notificação de Cópia */
+  .toast-notification {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background-color: #323232;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 99999;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    opacity: 0;
+    transform: translateY(100px);
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    pointer-events: none;
+  }
+  .toast-notification.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  /* Responsividade para ecrãs pequenos */
+  @media (max-width: 1200px) {
+    .form-container {
+      display: flex;
+      flex-direction: column;
+      text-align: center;
+      gap: 15px;
+      padding: 15px;
+    }
+    .left-section, .right-section {
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
+      width: 100%;
+    }
+    .center-status-container {
+      position: static;
+      transform: none;
+      margin: 5px 0;
+    }
+    .fullscreen-btn {
+      position: static;
+    }
+    .iframe-container {
+      grid-template-columns: 1fr;
+      top: 230px;
+    }
+  }
+
+  /* Modal styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10000;
+  }
+  .modal-overlay.active {
+    visibility: visible;
+    opacity: 1;
+  }
+  .modal-content {
+    background: white;
+    padding: 25px 30px 5px 30px;
+    border-radius: 8px;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    box-sizing: border-box;
+  }
+  .modal-content h2 {
+    font-family: 'Georgia', serif;
+    color: #3d63af;
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 12px 0;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+  .modal-content p {
+    font-family: 'Arial', sans-serif;
+    font-size: 16px;
+    color: #333;
+    line-height: 1.8;
+    margin: 0 0 10px 0;
+    font-style: italic;
+    text-align: justify;
+  }
+  .modal-content button {
+    padding: 8px 18px;
+    background-color: #3d63af;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .modal-content button:hover {
+    background-color: #0d1b60;
+  }
+  .modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 20px;
+  }
+  
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 15px;
+    margin-bottom: 0px;
+    border-top: 1px solid #f1f1f1;
+    padding-top: 10px;
+    width: 100%;
+  }
+
+  .popup-name {
+    font-weight: bold !important;
+    font-size: 12px !important;
+    color: #8e8a96;
+    margin: 0 !important;
+    text-align: right;
+    line-height: 1.2;
+    font-family: Arial, sans-serif;
+    letter-spacing: 0.8px;
+  }
+
+.diagnostic-panel{position:fixed;right:18px;bottom:18px;width:min(720px,calc(100vw - 36px));max-height:62vh;background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.35);z-index:50000;display:none;overflow:hidden;font-family:Consolas,"Courier New",monospace}
+.diagnostic-panel.active{display:flex;flex-direction:column}
+.diagnostic-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#1f2937;font-family:Arial,sans-serif}
+.diagnostic-head strong{font-size:14px}.diagnostic-actions{display:flex;gap:6px}
+.diagnostic-actions button{padding:5px 8px;font-size:11px;border-radius:5px;background:#374151;color:#fff}
+.diagnostic-summary{padding:8px 12px;background:#0f172a;font-family:Arial,sans-serif;font-size:12px;line-height:1.5}
+.diagnostic-log{margin:0;padding:10px 12px;overflow:auto;white-space:pre-wrap;font-size:11px;line-height:1.45;min-height:120px}
+.diag-ok{color:#86efac}.diag-warn{color:#fcd34d}.diag-error{color:#fca5a5}.diag-info{color:#93c5fd}
+.diag-button{position:fixed;right:18px;bottom:18px;z-index:49999;background:#374151!important;color:#fff!important}
+
+</style>
+<script>
+  let ultimaMatriculaPesquisada = "";
+
+  // =========================================================================
+  // CONFIGURAÇÕES E CONSTANTES CONFIGURÁVEIS (ASF)
+  // =========================================================================
+  const ASF_TIMEOUT_MS = 12000;          // Timeout da requisição
+  const ASF_MIN_INTERVAL_MS = 1000;      // Intervalo mínimo entre requisições
+  const ASF_JANELA_SEG = 30;             // Janela de sliding window
+  const ASF_LIMITE_JANELA = 6;           // Máximo requisições na janela
+  const ASF_CACHE_TTL_MS = 600000;       // Cache 10 minutos (600.000ms)
+  const ASF_MAX_RETRIES = 3;             // Máximo retries
+  const ASF_MAX_TENTATIVAS = 3;          // Tentativas totais por matrícula (1 pedido + 2 repetições)
+  const ASF_RETRY_EXTRA_MS = 2000;       // Espera extra antes de repetir (a cadência mínima de 8s continua a aplicar-se)
+  // ===== RELAY PRÓPRIO (Supabase Edge Function) =====
+  // Deixar RELAY_URL vazio = consulta a ASF diretamente, como antes.
+  // Se o relay não responder, a app consulta a ASF diretamente.
+  const RELAY_URL = 'https://wltxdyrjlnznfjqwdmmz.supabase.co/functions/v1/asf-relay';                  // ex.: 'https://xxxxxxxx.supabase.co/functions/v1/asf-relay'
+  const RELAY_KEY = 'MItLjE0R8J51bYaHcZnBQGmhAd6ZrNOXoJu';                  // a mesma chave guardada no segredo RELAY_KEY da função
+  const RELAY_TIMEOUT_MS = 22000;        // o relay pode fazer mais do que uma tentativa à ASF
+  const ASF_BACKOFF_BASE_MS = 1000;      // Base backoff exponencial (1s, 2s, 4s)
+
+  // =========================================================================
+  // ESTADO DA APLICAÇÃO E RASTREAMENTO
+  // =========================================================================
+  const cacheConsultas = new Map();
+  const tentativasConsulta = new Map();  // Rastreamento de retries por matrícula
+  let historicoPedidos = [];
+  let ultimoPedidoT = 0;
+  let filaPromessas = Promise.resolve();
+
+  function formatMatricula(input) {
+    let value = input.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    let formattedValue = value.replace(/(.{2})(.{2})?(.*)/, (_, p1, p2, p3) =>
+      [p1, p2, p3].filter(Boolean).join('-')
+    );
+    input.value = formattedValue.substring(0, 8);
+  }
+
+  function formatMatriculaReboque(input) {
+    const siglas = [
+      'A', 'AN', 'AV', 'BE', 'BG', 'BR', 'C', 'CB', 'E', 'FA',
+      'GD', 'H', 'L', 'LE', 'M', 'P', 'PT', 'SA', 'SE', 'VC', 'VI', 'VR'
+    ];
+    
+    let value = input.value.toUpperCase().replace(/[^A-Z0-9\-]/g, '');
+    let matchLetras = value.match(/^([A-Z]+)/);
+    
+    if (matchLetras) {
+      let letrasDigitadas = matchLetras[1];
+      let prefixoValido = siglas.some(sigla => sigla.startsWith(letrasDigitadas));
+      
+      if (!prefixoValido) {
+        value = value.substring(0, value.length - 1);
+        matchLetras = value.match(/^([A-Z]+)/);
+      }
+    }
+    
+    if (matchLetras) {
+      let siglaDefinitiva = matchLetras[1];
+      
+      if (!siglas.includes(siglaDefinitiva)) {
+        value = siglaDefinitiva;
+      } else {
+        let restante = value.substring(siglaDefinitiva.length).replace(/[^0-9]/g, '');
+        restante = restante.substring(0, 6);
+        
+        if (restante.length > 0) {
+          value = siglaDefinitiva + '-' + restante;
+        } else if (input.value.endsWith('-')) {
+          value = siglaDefinitiva + '-';
+        } else {
+          value = siglaDefinitiva;
+        }
+      }
+    } else {
+      value = '';
+    }
+    
+    input.value = value;
+  }
+
+  function mostrarLoading(frameId, overlayId) {
+    document.getElementById(overlayId).style.display = 'flex';
+    document.getElementById(frameId).style.zIndex = '1';
+  }
+
+  function occultarLoading(frameId, overlayId) {
+    document.getElementById(overlayId).style.display = 'none';
+    document.getElementById(frameId).style.zIndex = '2';
+  }
+
+  function submitConjunto(event) {
+    if (event) event.preventDefault();
+    
+    const inputVeiculo = document.getElementById('MatriculaVeiculo');
+    const inputReboque = document.getElementById('MatriculaReboque');
+    
+    const valVeiculo = inputVeiculo.value.trim();
+    const valReboque = inputReboque.value.trim();
+
+    if (!valVeiculo && !valReboque) {
+      alert("Por favor, introduza pelo menos uma matrícula.");
+      return;
+    }
+
+    // Atualiza sempre as inspeções nas iframes
+    if (valVeiculo && valReboque) {
+      mostrarLoading('veiculoFrame', 'veiculoLoading');
+      mostrarLoading('reboqueFrame', 'reboqueLoading');
+      document.getElementById('veiculoFrame').src = `http://consultapsp.imtt.external.rnsi.local/veiculos/consulta_inspecao.php?Matricula=${valVeiculo}`;
+      document.getElementById('reboqueFrame').src = `http://consultapsp.imtt.external.rnsi.local/veiculos/consulta_livrete.php?Matricula=${valReboque}`;
+      ultimaMatriculaPesquisada = valVeiculo;
+    } 
+    else if (valVeiculo && !valReboque) {
+      mostrarLoading('veiculoFrame', 'veiculoLoading');
+      mostrarLoading('reboqueFrame', 'reboqueLoading');
+      document.getElementById('veiculoFrame').src = `http://consultapsp.imtt.external.rnsi.local/veiculos/consulta_inspecao.php?Matricula=${valVeiculo}`;
+      document.getElementById('reboqueFrame').src = `http://consultapsp.imtt.external.rnsi.local/veiculos/consulta_livrete.php?Matricula=${valVeiculo}`;
+      ultimaMatriculaPesquisada = valVeiculo;
+    } 
+    else if (!valVeiculo && valReboque) {
+      mostrarLoading('veiculoFrame', 'veiculoLoading');
+      mostrarLoading('reboqueFrame', 'reboqueLoading');
+      document.getElementById('veiculoFrame').src = `http://consultapsp.imtt.external.rnsi.local/veiculos/consulta_inspecao.php?Matricula=${valReboque}`;
+      document.getElementById('reboqueFrame').src = `http://consultapsp.imtt.external.rnsi.local/veiculos/consulta_livrete.php?Matricula=${valReboque}`;
+      ultimaMatriculaPesquisada = valReboque;
+    }
+
+    // Consulta do seguro: Apenas se não houver já um pedido de seguro ativo
+    const matriculaParaSeguro = valVeiculo || valReboque;
+    if (matriculaParaSeguro) {
+      solicitarConsultaSeguro(matriculaParaSeguro);
+    } else {
+      setSeguroState('idle', 'SEGURO: N/A');
+    }
+
+    inputVeiculo.value = '';
+    inputReboque.value = '';
+  }
+
+  // =========================================================================
+  // LÓGICA DA CONSULTA DE SEGURO ASF
+  // =========================================================================
+  function sanitizarMatricula(mat) {
+    return String(mat || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  function setSeguroState(stateClass, badgeText) {
+    const containerEl = document.getElementById('seguroContainer');
+    const badgeEl = document.getElementById('seguroBadge');
+    if (containerEl) containerEl.className = `seguro-status-container ${stateClass}`;
+    if (badgeEl) badgeEl.textContent = badgeText;
+  }
+
+  function calcularAtrasoNecessario() {
+    if (ultimoPedidoT === 0) return 0;
+
+    const agora = Date.now();
+    historicoPedidos = historicoPedidos.filter(t => (agora - t) < ASF_JANELA_SEG * 1000);
+
+    let atraso = 0;
+    const decorrido = agora - ultimoPedidoT;
+
+    if (decorrido < ASF_MIN_INTERVAL_MS) {
+      atraso = Math.max(atraso, ASF_MIN_INTERVAL_MS - decorrido);
+    }
+
+    if (historicoPedidos.length >= ASF_LIMITE_JANELA) {
+      const maisAntigo = historicoPedidos[0];
+      const esperaJanela = (maisAntigo + (ASF_JANELA_SEG * 1000)) - agora + 200;
+      atraso = Math.max(atraso, esperaJanela);
+    }
+
+    return Math.max(0, Math.ceil(atraso));
+  }
+
+  function atualizarWidgetStatus() {
+    const atraso = calcularAtrasoNecessario();
+    const statusEl = document.getElementById('rateStatus');
+    if (!statusEl) return;
+
+    if (atraso > 0) {
+      const segs = Math.ceil(atraso / 1000);
+      statusEl.textContent = `Aguarde ${segs}s`;
+    } else if (filaSeguro.length > 0) {
+      statusEl.textContent = `${filaSeguro.length} em fila`;
+    } else {
+      statusEl.textContent = 'Pronto';
+    }
+  }
+
+  setInterval(atualizarWidgetStatus, 500);
+
+  // Fila exclusiva para as consultas ASF.
+  // Permite continuar a utilizar a aplicação enquanto uma consulta está a decorrer,
+  // mas nunca envia duas consultas ASF em simultâneo.
+  const filaSeguro = [];
+  let seguroEmProcessamento = false;
+  const matriculasNaFilaSeguro = new Set();
+
+  function solicitarConsultaSeguro(matDisplay) {
+    const matLimpa = sanitizarMatricula(matDisplay);
+    if (!matLimpa) return;
+
+    // Resultado válido em cache: não é necessário novo pedido ao servidor.
+    const emCache = cacheConsultas.get(matLimpa);
+    if (emCache && (Date.now() - emCache.timestamp) < ASF_CACHE_TTL_MS) {
+      exibirResultadoSeguro(emCache.temSeguro, true);
+      return;
+    }
+
+    // Se a mesma matrícula já estiver a ser processada ou em fila, não duplicar o pedido.
+    if (matriculasNaFilaSeguro.has(matLimpa)) {
+      console.log(`[ASF] ${matLimpa} já está em processamento/fila. Novo pedido ignorado.`);
+      return;
+    }
+
+    filaSeguro.push(matLimpa);
+    matriculasNaFilaSeguro.add(matLimpa);
+    atualizarWidgetStatus();
+    processarFilaSeguro();
+  }
+
+  async function processarFilaSeguro() {
+    if (seguroEmProcessamento || filaSeguro.length === 0) return;
+
+    seguroEmProcessamento = true;
+    const matLimpa = filaSeguro.shift();
+    atualizarWidgetStatus();
+
+    try {
+      await processarConsultaSeguroComCadencia(matLimpa);
+    } finally {
+      matriculasNaFilaSeguro.delete(matLimpa);
+      seguroEmProcessamento = false;
+      atualizarWidgetStatus();
+      // Processa a próxima matrícula somente depois de a anterior terminar.
+      processarFilaSeguro();
+    }
+  }
+
+  // Pedido ao relay. Devolve null se o relay não deu uma resposta da ASF
+  // (inacessível, chave errada, projeto em pausa...), para a app cair no pedido direto.
+  async function efetuarPedidoRelay(matLimpa, dataHoje) {
+    const inicio=performance.now();
+    const corpo=JSON.stringify({matricula:matLimpa,date:dataHoje});
+    try {
+      let status=0,text='',relayOk=false,tentativas='',asfMs='';
+      if(typeof ActiveXObject!=='undefined'){
+        const xhr=new ActiveXObject("WinHttp.WinHttpRequest.5.1");
+        xhr.open("POST",RELAY_URL,false);
+        xhr.setTimeouts(10000,10000,RELAY_TIMEOUT_MS,RELAY_TIMEOUT_MS);
+        xhr.setRequestHeader("Content-Type","application/json");
+        xhr.setRequestHeader("x-relay-key",RELAY_KEY);
+        xhr.send(corpo);
+        status=Number(xhr.Status||0);text=xhr.ResponseText||'';
+        relayOk=(xhr.GetResponseHeader('x-relay')||'')==='1';
+        tentativas=xhr.GetResponseHeader('x-relay-attempts')||'';asfMs=xhr.GetResponseHeader('x-relay-asf-ms')||'';
+      } else {
+        const controller=new AbortController();
+        const timeoutId=setTimeout(()=>controller.abort(),RELAY_TIMEOUT_MS);
+        try{
+          const res=await fetch(RELAY_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','x-relay-key':RELAY_KEY},body:corpo,signal:controller.signal});
+          text=await res.text();status=res.status;
+          relayOk=res.headers.get('x-relay')==='1';
+          tentativas=res.headers.get('x-relay-attempts')||'';asfMs=res.headers.get('x-relay-asf-ms')||'';
+        } finally { clearTimeout(timeoutId); }
+      }
+      const duracao=Math.round(performance.now()-inicio);
+      if(!relayOk){
+        diagAdicionar('WARN','Relay não devolveu resposta da ASF; a consultar a ASF diretamente.',{status,duracaoMs:duracao});
+        return null;
+      }
+      diagAdicionar('INFO','Resposta da ASF recebida via relay.',{status,duracaoMs:duracao,tentativasRelay:tentativas,asfMs});
+      return {status,text,duracao,contentType:'',server:'relay'};
+    } catch(err) {
+      diagAdicionar('WARN','Relay inacessível; a consultar a ASF diretamente.',{duracaoMs:Math.round(performance.now()-inicio),erro:err?.name||'Erro',mensagem:err?.message||String(err)});
+      return null;
+    }
+  }
+
+  // Executa a requisição física HTTP/XHR com timeout.
+  async function efetuarPedidoHttpASF(url) {
+    const inicio=performance.now();
+    try {
+      if(typeof ActiveXObject!=='undefined'){
+        const xhr=new ActiveXObject("WinHttp.WinHttpRequest.5.1");
+        xhr.open("POST",url,false);
+        xhr.setTimeouts(10000,10000,ASF_TIMEOUT_MS,ASF_TIMEOUT_MS);
+        xhr.setRequestHeader("Accept","application/json, text/plain, */*");
+        xhr.send(null);
+        return {status:xhr.Status,text:xhr.ResponseText,duracao:Math.round(performance.now()-inicio),contentType:xhr.GetResponseHeader('Content-Type')||'',server:xhr.GetResponseHeader('Server')||''};
+      } else {
+        const controller=new AbortController();
+        const timeoutId=setTimeout(()=>controller.abort(),ASF_TIMEOUT_MS);
+        try{
+          const res=await fetch(url,{method:'POST',headers:{'Accept':'application/json, text/plain, */*'},signal:controller.signal});
+          const text=await res.text();
+          return {status:res.status,text,duracao:Math.round(performance.now()-inicio),contentType:res.headers.get('content-type')||'',server:res.headers.get('server')||''};
+        } finally { clearTimeout(timeoutId); }
+      }
+    } catch(err) {
+      const duracao=Math.round(performance.now()-inicio);
+      if(err?.name==='AbortError'){
+        diagnosticoASF.contadores.timeout++;diagnosticoASF.contadores.indisponivel++;
+        diagAdicionar('ERROR','Timeout na comunicação com a ASF.',{duracaoMs:duracao,timeoutMs:ASF_TIMEOUT_MS});
+      } else {
+        diagnosticoASF.contadores.rede++;diagnosticoASF.contadores.indisponivel++;
+        diagAdicionar('ERROR','Falha de rede/fetch na comunicação com a ASF.',{duracaoMs:duracao,erro:err?.name||'Erro',mensagem:err?.message||String(err)});
+      }
+      try { err.code = (err?.name === 'AbortError') ? 'TIMEOUT' : 'REDE'; } catch (_) {}
+      throw err;
+    }
+  }
+
+  // Consulta ASF e valida rigorosamente a resposta.
+  // IMPORTANTE: uma resposta inválida/não interpretável NUNCA é convertida em "SEM SEGURO".
+  async function realizarConsultaASF(matLimpa) {
+    const hoje=new Date(),yyyy=hoje.getFullYear(),mm=String(hoje.getMonth()+1).padStart(2,'0'),dd=String(hoje.getDate()).padStart(2,'0');
+    const dataHoje=`${yyyy}/${mm}/${dd}`;
+    const queryGQL=`mutation license { mobishoutEntry { noone { entry { licenseNumber(license: "${matLimpa}", date: "${dataHoje}") { nodes { id license } } } } } }`;
+    const url=`https://ext01.asf.com.pt/api/src/?query=${encodeURIComponent(queryGQL)}`;
+    diagnosticoASF.contadores.total++;
+    let resposta=null;
+    if(RELAY_URL) resposta=await efetuarPedidoRelay(matLimpa,dataHoje);
+    if(!resposta) resposta=await efetuarPedidoHttpASF(url);
+    const resultado=diagnosticoInterpretarResposta(resposta.status,resposta.text,resposta.duracao,matLimpa,resposta);
+    if(resultado.tipo==='seguro')return true;
+    if(resultado.tipo==='semseguro')return false;
+    const erroASF = new Error(`Consulta ASF indisponível: ${resultado.motivo}`);
+    const m = String(resultado.motivo || '');
+    if (m === 'Erro GraphQL') erroASF.code = 'GRAPHQL_INDISPONIVEL';   // "Serviço Indisponível" devolvido pela ASF (intermitente)
+    else if (/^HTTP 5\d\d$/.test(m)) erroASF.code = 'SERVER_ERROR';
+    else if (m === 'HTTP 429' || m === 'HTTP 403') erroASF.code = 'BLOQUEIO'; // não insistir
+    else if (/^HTTP /.test(m)) erroASF.code = 'HTTP_ERROR';
+    else erroASF.code = 'RESPOSTA_INVALIDA';                           // não insistir
+    throw erroASF;
+  }
+
+  // Apenas erros transitórios justificam uma nova tentativa.
+  // 403, 429 e respostas inválidas não são repetidos agressivamente.
+  async function processarConsultaSeguroComCadencia(matLimpa) {
+    let tentativa = 0;
+    let ultimoErro = null;
+    const MAX_TENTATIVAS = ASF_MAX_TENTATIVAS;
+
+    while (tentativa < MAX_TENTATIVAS) {
+      let atraso = calcularAtrasoNecessario();
+
+      while (atraso > 0) {
+        setSeguroState('warn', 'A AGUARDAR');
+        await new Promise(r => setTimeout(r, Math.min(atraso, 1000)));
+        atraso = calcularAtrasoNecessario();
+      }
+
+      setSeguroState('warn', tentativa === 0 ? 'A VERIFICAR...' : 'A REPETIR...');
+
+      const agora = Date.now();
+      ultimoPedidoT = agora;
+      historicoPedidos.push(agora);
+      atualizarWidgetStatus();
+
+      try {
+        const temSeguro = await realizarConsultaASF(matLimpa);
+
+        // Só uma resposta estruturalmente válida entra no cache.
+        cacheConsultas.set(matLimpa, {
+          timestamp: Date.now(),
+          temSeguro: temSeguro
+        });
+
+        if (tentativa > 0) {
+          diagAdicionar('OK', `Recuperado à tentativa ${tentativa + 1}/${MAX_TENTATIVAS}.`, { matricula: diagMatricula(matLimpa), tentativas: tentativa + 1 });
+        }
+
+        exibirResultadoSeguro(temSeguro, false);
+        return;
+      } catch (err) {
+        ultimoErro = err;
+        console.warn(`[ASF] Falha na tentativa ${tentativa + 1}/${MAX_TENTATIVAS} (${matLimpa}):`, err?.message || err);
+
+        const codigo = err?.code || '';
+
+        // Não insistir quando o próprio servidor está a indicar bloqueio/proibição,
+        // nem quando a resposta veio com estrutura inválida.
+        const podeRepetir =
+          codigo === 'TIMEOUT' ||
+          codigo === 'REDE' ||
+          codigo === 'GRAPHQL_INDISPONIVEL' ||
+          codigo === 'SERVER_ERROR' ||
+          codigo === 'HTTP_ERROR';
+
+        tentativa++;
+
+        if (!podeRepetir || tentativa >= MAX_TENTATIVAS) {
+          if (tentativa >= MAX_TENTATIVAS) diagAdicionar('ERROR', `Esgotadas as ${MAX_TENTATIVAS} tentativas.`, { matricula: diagMatricula(matLimpa), motivo: codigo });
+          break;
+        }
+
+        // Espera deliberada antes de repetir: reduz a possibilidade de agravar um bloqueio.
+        diagAdicionar('INFO', 'Nova tentativa agendada.', { matricula: diagMatricula(matLimpa), tentativa: tentativa + 1, de: MAX_TENTATIVAS, motivo: codigo });
+        await new Promise(r => setTimeout(r, ASF_RETRY_EXTRA_MS));
+      }
+    }
+
+    console.error(`[ASF] Consulta indisponível para ${matLimpa}:`, ultimoErro);
+
+    // MUITO IMPORTANTE: erro de comunicação nunca significa "SEM SEGURO".
+    setSeguroState('warn', 'INDISPONÍVEL');
+  }
+
+  function exibirResultadoSeguro(temSeguro, deCache) {
+    const sufixo = deCache ? ' (C)' : '';
+
+    if (temSeguro === true) {
+      setSeguroState('ok', 'SEGURO ATIVO' + sufixo);
+    } else if (temSeguro === false) {
+      setSeguroState('no', 'SEM SEGURO' + sufixo);
+    } else {
+      // Proteção adicional contra qualquer valor inesperado.
+      setSeguroState('warn', 'INDISPONÍVEL');
+    }
+  }
+
+  function obterMatriculaOuVazia() {
+    return ultimaMatriculaPesquisada || "";
+  }
+
+  function copiarEVisualizar(texto) {
+    if (!texto) return;
+    navigator.clipboard.writeText(texto).then(() => {
+      const toast = document.getElementById('toastNotification');
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2500);
+    }).catch(err => {
+      console.log('Erro ao copiar matrícula: ', err);
+    });
+  }
+
+  function consultarIMTERRU() {
+    const mat = obterMatriculaOuVazia();
+    copiarEVisualizar(mat);
+    const url = `https://erru.imt-ip.pt/ERRU/`;
+    window.open(url, 'IMTERRUPopup', 'width=900,height=700,top=100,left=100,resizable=yes,scrollbars=yes');
+  }
+
+  function consultarINEM() {
+    const mat = obterMatriculaOuVazia();
+    copiarEVisualizar(mat);
+    const url = `https://alvaras.inem.pt/DMZ/ConsultaCertificado.aspx`;
+    window.open(url, 'INEMPopup', 'width=900,height=700,top=100,left=100,resizable=yes,scrollbars=yes');
+  }
+
+  function consultarASF() {
+    const mat = obterMatriculaOuVazia();
+    copiarEVisualizar(mat);
+    const url = `https://www.consumidor.asf.com.pt/servi%C3%A7os/verificar-seguro-atrav%C3%A9s-da-matr%C3%ADcula`;
+    window.open(url, 'ASFPopup', 'width=900,height=700,top=100,left=100,resizable=yes,scrollbars=yes');
+  }
+
+  function consultarWAZE() {
+    const url = `https://location.wazept.com/#/`;
+    window.open(url, 'WazePopup', 'width=900,height=700,top=100,left=100,resizable=yes,scrollbars=yes');
+  }
+
+  function toggleFullscreen() {
+    const doc = document.documentElement;
+    if (!document.fullscreenElement) {
+      doc.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  function showModal() {
+    document.getElementById('popupModal').classList.add('active');
+  }
+  function closeModal() {
+    document.getElementById('popupModal').classList.remove('active');
+  }
+
+  window.addEventListener('load', () => { showModal(); diagAdicionar('INFO','Diagnóstico ASF iniciado.',{online:navigator.onLine,userAgent:navigator.userAgent,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}); });
+  window.addEventListener('click', (e) => { if (e.target === document.getElementById('popupModal')) closeModal(); });
+
+  const diagnosticoASF = {
+    eventos: [],
+    contadores: {total:0,sucesso:0,semSeguro:0,indisponivel:0,http429:0,http403:0,http5xx:0,timeout:0,rede:0,resposta200Invalida:0,resposta200Vazia:0}
+  };
+
+  function diagMatricula(mat){
+    const s = sanitizarMatricula(mat);
+    return s ? (s.length <= 3 ? s : '***' + s.slice(-3)) : '—';
+  }
+  function diagAdicionar(tipo,mensagem,dados={}){
+    diagnosticoASF.eventos.push({hora:new Date().toLocaleTimeString('pt-PT'),tipo,mensagem,dados});
+    if(diagnosticoASF.eventos.length>250) diagnosticoASF.eventos.shift();
+    diagRenderizar();
+    console.log('[DIAGNÓSTICO ASF]',mensagem,dados);
+  }
+  function diagRenderizar(){
+    const log=document.getElementById('diagnosticLog'), resumo=document.getElementById('diagnosticSummary');
+    if(!log||!resumo)return;
+    const c=diagnosticoASF.contadores;
+    resumo.innerHTML=`<b>Consultas:</b> ${c.total} &nbsp; <span class="diag-ok">OK: ${c.sucesso}</span> &nbsp; <span class="diag-warn">Indisponível: ${c.indisponivel}</span> &nbsp; <span class="diag-error">429: ${c.http429}</span> &nbsp; <span class="diag-error">403: ${c.http403}</span> &nbsp; <span class="diag-error">5xx: ${c.http5xx}</span> &nbsp; <span class="diag-warn">Timeout: ${c.timeout}</span> &nbsp; <span class="diag-warn">Rede: ${c.rede}</span>`;
+    const cls=t=>t==='OK'?'diag-ok':t==='WARN'?'diag-warn':t==='ERROR'?'diag-error':'diag-info';
+    log.innerHTML=diagnosticoASF.eventos.map(e=>`<div class="${cls(e.tipo)}">[${e.hora}] ${e.tipo} — ${e.mensagem}${Object.keys(e.dados||{}).length?`\n    ${JSON.stringify(e.dados)}`:''}</div>`).join('\n');
+    log.scrollTop=log.scrollHeight;
+  }
+  function abrirDiagnostico(){document.getElementById('diagnosticPanel')?.classList.add('active');diagRenderizar()}
+  function fecharDiagnostico(){document.getElementById('diagnosticPanel')?.classList.remove('active')}
+  function limparDiagnostico(){
+    diagnosticoASF.eventos=[];
+    diagnosticoASF.contadores={total:0,sucesso:0,semSeguro:0,indisponivel:0,http429:0,http403:0,http5xx:0,timeout:0,rede:0,resposta200Invalida:0,resposta200Vazia:0};
+    diagAdicionar('INFO','Registo de diagnóstico limpo.');
+  }
+  function exportarDiagnostico(){
+    const dados={aplicacao:'IPO 2.5 — Diagnóstico ASF detalhado',dataExportacao:new Date().toISOString(),userAgent:navigator.userAgent,online:navigator.onLine,ligacao:(()=>{const c=navigator.connection;return c?{tipo:c.type||null,effectiveType:c.effectiveType||null,rttMs:c.rtt??null,downlinkMbps:c.downlink??null,saveData:!!c.saveData}:null})(),language:navigator.language,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,contadores:diagnosticoASF.contadores,eventos:diagnosticoASF.eventos};
+    const blob=new Blob([JSON.stringify(dados,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=`diagnostico-asf-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  function diagnosticoInterpretarResposta(httpStatus,texto,duracao,matLimpa,transporte={}){
+    let json=null,jsonValido=true;
+    try{json=JSON.parse(texto)}catch(e){jsonValido=false}
+    const base={matricula:diagMatricula(matLimpa),http:httpStatus,duracaoMs:duracao,bytes:(texto||'').length,jsonValido,contentType:transporte.contentType||'',server:transporte.server||''};
+    // Guardamos apenas uma amostra da resposta para identificar erros GraphQL/proxy,
+    // sem registar a matrícula completa nem despejar a resposta inteira.
+    let diagnosticoResposta='';
+    if(texto){
+      diagnosticoResposta=texto.replace(/licenseNumber\s*\([^)]*\)/gi,'licenseNumber(...)').slice(0,600);
+    }
+    if(json && Array.isArray(json.errors)){
+      base.graphQLErrors=json.errors.map(e=>({message:e?.message||'',path:e?.path||null,extensions:e?.extensions||null}));
+    }
+    if(diagnosticoResposta) base.amostraResposta=diagnosticoResposta;
+    if(httpStatus===429){diagnosticoASF.contadores.http429++;diagnosticoASF.contadores.indisponivel++;diagAdicionar('ERROR','ASF respondeu HTTP 429 — possível rate limit/bloqueio.',base);return{tipo:'indisponivel',motivo:'HTTP 429'}}
+    if(httpStatus===403){diagnosticoASF.contadores.http403++;diagnosticoASF.contadores.indisponivel++;diagAdicionar('ERROR','ASF respondeu HTTP 403 — acesso proibido/bloqueado.',base);return{tipo:'indisponivel',motivo:'HTTP 403'}}
+    if(httpStatus>=500&&httpStatus<=599){diagnosticoASF.contadores.http5xx++;diagnosticoASF.contadores.indisponivel++;diagAdicionar('ERROR',`ASF respondeu HTTP ${httpStatus} — erro do servidor.`,base);return{tipo:'indisponivel',motivo:`HTTP ${httpStatus}`}}
+    if(httpStatus<200||httpStatus>=300){diagnosticoASF.contadores.indisponivel++;diagAdicionar('ERROR',`ASF respondeu HTTP ${httpStatus}.`,base);return{tipo:'indisponivel',motivo:`HTTP ${httpStatus}`}}
+    if(!texto||!texto.trim()){diagnosticoASF.contadores.resposta200Vazia++;diagnosticoASF.contadores.indisponivel++;diagAdicionar('WARN','ASF respondeu HTTP 200, mas a resposta está vazia.',base);return{tipo:'indisponivel',motivo:'HTTP 200 vazio'}}
+    if(!jsonValido){diagnosticoASF.contadores.resposta200Invalida++;diagnosticoASF.contadores.indisponivel++;diagAdicionar('WARN','ASF respondeu HTTP 200, mas não devolveu JSON válido.',{...base,inicioResposta:texto.slice(0,180)});return{tipo:'indisponivel',motivo:'JSON inválido'}}
+    const licenseNode=json?.data?.mobishoutEntry?.noone?.entry?.licenseNumber;
+    if(!licenseNode||!Array.isArray(licenseNode.nodes)){diagnosticoASF.contadores.resposta200Invalida++;diagnosticoASF.contadores.indisponivel++;diagAdicionar('WARN',json?.errors?.length?'ASF respondeu HTTP 200 com erro GraphQL.':'ASF respondeu HTTP 200, mas a estrutura esperada não existe.',{...base,temData:!!json?.data,temMobishoutEntry:!!json?.data?.mobishoutEntry,temLicenseNode:!!licenseNode,nodesArray:Array.isArray(licenseNode?.nodes)});return{tipo:'indisponivel',motivo:json?.errors?.length?'Erro GraphQL':'Estrutura ASF inesperada'}}
+    const nodes=licenseNode.nodes,temSeguro=nodes.some(n=>n&&n.license!=null);
+    if(temSeguro){diagnosticoASF.contadores.sucesso++;diagAdicionar('OK','Resposta ASF válida: seguro encontrado.',{...base,nodes:nodes.length});return{tipo:'seguro',temSeguro:true}}
+    diagnosticoASF.contadores.semSeguro++;diagAdicionar('WARN','Resposta ASF válida sem registo de seguro.',{...base,nodes:nodes.length});return{tipo:'semseguro',temSeguro:false}
+  }
+  window.addEventListener('online',()=>diagAdicionar('OK','Navegador indica ligação ONLINE.'));
+  window.addEventListener('offline',()=>diagAdicionar('ERROR','Navegador indica ligação OFFLINE.'));
+
+</script>
+</head>
+<body>
+  <div id="toastNotification" class="toast-notification">Matrícula copiada!</div>
+
+  <div id="popupModal" class="modal-overlay">
+    <div class="modal-content">
+      <h2>Bem-vindo!</h2>
+      <p>Caro(a) utilizador(a), a aplicação encontra-se disponível exclusivamente através da intranet.</p>
+      <div class="modal-buttons">
+        <button onclick="closeModal()">FECHAR</button>
+      </div>
+      <div class="modal-footer">
+        <p class="popup-name">Fábio Moço · GP2150375</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-container">
+    
+    <!-- Esquerda: Formulário -->
+    <div class="left-section">
+      <form onsubmit="submitConjunto(event)" style="display: flex; gap: 15px; align-items: center;">
+        <div class="input-group">
+          <label for="MatriculaVeiculo">Veículo:</label>
+          <input type="text" id="MatriculaVeiculo" placeholder="11-AA-11" maxlength="8" oninput="formatMatricula(this)">
+        </div>
+
+        <div class="input-group">
+          <label for="MatriculaReboque">Reboque:</label>
+          <input type="text" id="MatriculaReboque" placeholder="L-121212" oninput="formatMatriculaReboque(this)">
+        </div>
+
+        <button type="submit" id="btnSubmit">CONSULTAR</button>
+      </form>
+    </div>
+
+    <!-- Centro Absoluto: Indicador do Estado do Seguro -->
+    <div class="center-status-container">
+      <div id="seguroContainer" class="seguro-status-container idle">
+        <div id="seguroBadge" class="seguro-badge">SEGURO: —</div>
+        </div>
+    </div>
+
+    <!-- Direita: Botões Auxiliares -->
+    <div class="right-section">
+      <button type="button" class="aux-btn" onclick="consultarIMTERRU()">IMT-ERRU</button>
+      <button type="button" class="aux-btn" onclick="consultarINEM()">INEM</button>
+      <button type="button" class="aux-btn" onclick="consultarASF()">ASF</button>
+      <button type="button" class="aux-btn" onclick="consultarWAZE()">WAZE</button>
+      <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Ecrã Inteiro">⛶</button>
+    </div>
+
+  </div>
+
+  <div class="iframe-container">
+    <div class="iframe-wrapper">
+      <div id="veiculoLoading" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        A carregar inspeção...
+      </div>
+      <iframe id="veiculoFrame" loading="lazy" onload="occultarLoading('veiculoFrame', 'veiculoLoading')"></iframe>
+    </div>
+
+    <div class="iframe-wrapper">
+      <div id="reboqueLoading" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        A carregar livrete...
+      </div>
+      <iframe id="reboqueFrame" loading="lazy" onload="occultarLoading('reboqueFrame', 'reboqueLoading')"></iframe>
+    </div>
+  </div>
+
+  <div id="diagnosticPanel" class="diagnostic-panel">
+    <div class="diagnostic-head">
+      <strong>Diagnóstico ASF — IPO 2.4</strong>
+      <div class="diagnostic-actions">
+        <button type="button" onclick="exportarDiagnostico()">EXPORTAR</button>
+        <button type="button" onclick="limparDiagnostico()">LIMPAR</button>
+        <button type="button" onclick="fecharDiagnostico()">FECHAR</button>
+      </div>
+    </div>
+    <div id="diagnosticSummary" class="diagnostic-summary">A iniciar...</div>
+    <div id="diagnosticLog" class="diagnostic-log"></div>
+  </div>
+
+</body>
+</html>
