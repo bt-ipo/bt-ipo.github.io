@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/png" href="favicon.png">
 <title>Consulta de Matrícula</title>
 <style>
   body {
@@ -396,16 +397,14 @@
   // CONFIGURAÇÕES E CONSTANTES CONFIGURÁVEIS (ASF)
   // =========================================================================
   const ASF_TIMEOUT_MS = 12000;          // Timeout da requisição
-  const ASF_MIN_INTERVAL_MS = 1000;      // Intervalo mínimo entre requisições
-  const ASF_JANELA_SEG = 30;             // Janela de sliding window
+  const ASF_MIN_INTERVAL_MS = 5000;      // Intervalo mínimo entre requisições
+  const ASF_JANELA_SEG = 60;             // Janela de sliding window
   const ASF_LIMITE_JANELA = 6;           // Máximo requisições na janela
   const ASF_CACHE_TTL_MS = 600000;       // Cache 10 minutos (600.000ms)
   const ASF_MAX_RETRIES = 3;             // Máximo retries
   const ASF_MAX_TENTATIVAS = 3;          // Tentativas totais por matrícula (1 pedido + 2 repetições)
-  const ASF_RETRY_EXTRA_MS = 2000;       // Espera extra antes de repetir (a cadência mínima de 8s continua a aplicar-se)
+  const ASF_RETRY_EXTRA_MS = 6000;       // Espera extra antes de repetir (a cadência mínima de 8s continua a aplicar-se)
   // ===== RELAY PRÓPRIO (Supabase Edge Function) =====
-  // Deixar RELAY_URL vazio = consulta a ASF diretamente, como antes.
-  // Se o relay não responder, a app consulta a ASF diretamente.
   const RELAY_URL = 'https://wltxdyrjlnznfjqwdmmz.supabase.co/functions/v1/asf-relay';                  // ex.: 'https://xxxxxxxx.supabase.co/functions/v1/asf-relay'
   const RELAY_KEY = 'MItLjE0R8J51bYaHcZnBQGmhAd6ZrNOXoJu';                  // a mesma chave guardada no segredo RELAY_KEY da função
   const RELAY_TIMEOUT_MS = 22000;        // o relay pode fazer mais do que uma tentativa à ASF
@@ -714,8 +713,12 @@
     const url=`https://ext01.asf.com.pt/api/src/?query=${encodeURIComponent(queryGQL)}`;
     diagnosticoASF.contadores.total++;
     let resposta=null;
-    if(RELAY_URL) resposta=await efetuarPedidoRelay(matLimpa,dataHoje);
-    if(!resposta) resposta=await efetuarPedidoHttpASF(url);
+    resposta=await efetuarPedidoRelay(matLimpa,dataHoje);
+    if(!resposta){
+      const erroRelay=new Error('Relay indisponível');
+      erroRelay.code='RELAY_INDISPONIVEL';
+      throw erroRelay;
+    }
     const resultado=diagnosticoInterpretarResposta(resposta.status,resposta.text,resposta.duracao,matLimpa,resposta);
     if(resultado.tipo==='seguro')return true;
     if(resultado.tipo==='semseguro')return false;
@@ -740,7 +743,7 @@
       let atraso = calcularAtrasoNecessario();
 
       while (atraso > 0) {
-        setSeguroState('warn', 'A AGUARDAR');
+        setSeguroState('warn', `A VERIFICAR... ${Math.ceil(atraso / 1000)}s`);
         await new Promise(r => setTimeout(r, Math.min(atraso, 1000)));
         atraso = calcularAtrasoNecessario();
       }
