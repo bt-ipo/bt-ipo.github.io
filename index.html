@@ -630,11 +630,22 @@
     }
   }
 
+function obterIdInstalacao() {
+  try {
+    let id = localStorage.getItem('IPO_ID_INSTALACAO');
+    if (!id) {
+      id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID()
+         : 'i-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('IPO_ID_INSTALACAO', id);
+    }
+    return id;
+  } catch (e) { return ''; }
+}
   // Pedido ao relay. Devolve null se o relay não deu uma resposta da ASF
   // (inacessível, chave errada, projeto em pausa...), para a app cair no pedido direto.
   async function efetuarPedidoRelay(matLimpa, dataHoje) {
     const inicio=performance.now();
-    const corpo=JSON.stringify({matricula:matLimpa,date:dataHoje});
+    const corpo=JSON.stringify({matricula:matLimpa,date:dataHoje,installationId:obterIdInstalacao()});
     try {
       let status=0,text='',relayOk=false,tentativas='',asfMs='';
       if(typeof ActiveXObject!=='undefined'){
@@ -658,7 +669,13 @@
         } finally { clearTimeout(timeoutId); }
       }
       const duracao=Math.round(performance.now()-inicio);
-      if(!relayOk){
+     if(status===429 && !relayOk){
+  let ra=0; try{ ra=Number(JSON.parse(text).retry_after_s)||0; }catch(_){}
+  diagAdicionar('WARN','Relay: limite de pedidos atingido.',{retryAfterS:ra,duracaoMs:duracao});
+  return {limite:true,retryAfterMs:Math.max(1,ra)*1000};
+} 
+
+if(!relayOk){
         diagAdicionar('WARN','Relay não devolveu resposta da ASF; a consultar a ASF diretamente.',{status,duracaoMs:duracao});
         return null;
       }
@@ -714,7 +731,14 @@
     diagnosticoASF.contadores.total++;
     let resposta=null;
     resposta=await efetuarPedidoRelay(matLimpa,dataHoje);
-    if(!resposta){
+    if(resposta && resposta.limite){
+  const erroLimite=new Error('Relay: limite de pedidos');
+  erroLimite.code='RELAY_LIMITE';
+  erroLimite.retryAfterMs=resposta.retryAfterMs;
+  throw erroLimite;
+}
+
+	if(!resposta){
       const erroRelay=new Error('Relay indisponível');
       erroRelay.code='RELAY_INDISPONIVEL';
       throw erroRelay;
@@ -779,6 +803,7 @@
         // Não insistir quando o próprio servidor está a indicar bloqueio/proibição,
         // nem quando a resposta veio com estrutura inválida.
         const podeRepetir =
+	  codigo === 'RELAY_LIMITE' ||
           codigo === 'TIMEOUT' ||
           codigo === 'REDE' ||
           codigo === 'GRAPHQL_INDISPONIVEL' ||
@@ -794,7 +819,7 @@
 
         // Espera deliberada antes de repetir: reduz a possibilidade de agravar um bloqueio.
         diagAdicionar('INFO', 'Nova tentativa agendada.', { matricula: diagMatricula(matLimpa), tentativa: tentativa + 1, de: MAX_TENTATIVAS, motivo: codigo });
-        await new Promise(r => setTimeout(r, ASF_RETRY_EXTRA_MS));
+        await new Promise(r => setTimeout(r, Math.max(ASF_RETRY_EXTRA_MS, Math.min(err?.retryAfterMs || 0, 20000))));
       }
     }
 
