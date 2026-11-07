@@ -397,9 +397,7 @@
   // CONFIGURAÇÕES E CONSTANTES CONFIGURÁVEIS (ASF)
   // =========================================================================
   const ASF_TIMEOUT_MS = 12000;          // Timeout da requisição
-  const ASF_MIN_INTERVAL_MS = 5000;      // Intervalo mínimo entre requisições
-  const ASF_JANELA_SEG = 60;             // Janela de sliding window
-  const ASF_LIMITE_JANELA = 6;           // Máximo requisições na janela
+  // SEM limites na APP. Intervalo, janela e cadência ficam SÓ no relay (global, no Supabase).
   const ASF_CACHE_TTL_MS = 600000;       // Cache 10 minutos (600.000ms)
   const ASF_MAX_RETRIES = 3;             // Máximo retries
   const ASF_MAX_TENTATIVAS = 3;          // Tentativas totais por matrícula (1 pedido + 2 repetições)
@@ -439,8 +437,7 @@
   // =========================================================================
   const cacheConsultas = new Map();
   const tentativasConsulta = new Map();  // Rastreamento de retries por matrícula
-  let historicoPedidos = [];
-  let ultimoPedidoT = 0;
+  // SEM historicoPedidos / ultimoPedidoT. O histórico global está em relay_hits no Supabase, não no browser.
   let filaPromessas = Promise.resolve();
 
   function formatMatricula(input) {
@@ -568,36 +565,18 @@
   }
 
   function calcularAtrasoNecessario() {
-    if (ultimoPedidoT === 0) return 0;
-
-    const agora = Date.now();
-    historicoPedidos = historicoPedidos.filter(t => (agora - t) < ASF_JANELA_SEG * 1000);
-
-    let atraso = 0;
-    const decorrido = agora - ultimoPedidoT;
-
-    if (decorrido < ASF_MIN_INTERVAL_MS) {
-      atraso = Math.max(atraso, ASF_MIN_INTERVAL_MS - decorrido);
-    }
-
-    if (historicoPedidos.length >= ASF_LIMITE_JANELA) {
-      const maisAntigo = historicoPedidos[0];
-      const esperaJanela = (maisAntigo + (ASF_JANELA_SEG * 1000)) - agora + 200;
-      atraso = Math.max(atraso, esperaJanela);
-    }
-
-    return Math.max(0, Math.ceil(atraso));
+    // SEM limites na APP. Antes: 5s entre pedidos + max 6 em 60s por browser (LOCAL).
+    // Isso era LOCAL, não GLOBAL: cada portátil tinha o seu contador e não via o do outro.
+    // Agora é o relay que decide. Se o relay disser 429, a APP espera o retry_after do relay.
+    return 0;
   }
 
   function atualizarWidgetStatus() {
-    const atraso = calcularAtrasoNecessario();
+    // SEM Aguarde. O limite é só no relay, a APP não impõe espera.
     const statusEl = document.getElementById('rateStatus');
     if (!statusEl) return;
 
-    if (atraso > 0) {
-      const segs = Math.ceil(atraso / 1000);
-      statusEl.textContent = `Aguarde ${segs}s`;
-    } else if (filaSeguro.length > 0) {
+    if (filaSeguro.length > 0) {
       statusEl.textContent = `${filaSeguro.length} em fila`;
     } else {
       statusEl.textContent = 'Pronto';
@@ -772,19 +751,11 @@ function obterIdInstalacao() {
     const MAX_TENTATIVAS = ASF_MAX_TENTATIVAS;
 
     while (tentativa < MAX_TENTATIVAS) {
-      let atraso = calcularAtrasoNecessario();
-
-      while (atraso > 0) {
-        setSeguroState('warn', `A VERIFICAR... ${Math.ceil(atraso / 1000)}s`);
-        await new Promise(r => setTimeout(r, Math.min(atraso, 1000)));
-        atraso = calcularAtrasoNecessario();
-      }
+      // SEM espera local. O relay é que impõe o gap global. Se o relay disser 429, espera-se o retry_after dele.
 
       setSeguroState('warn', tentativa === 0 ? 'A VERIFICAR...' : 'A REPETIR...');
 
-      const agora = Date.now();
-      ultimoPedidoT = agora;
-      historicoPedidos.push(agora);
+      // SEM registar historico local. O relay regista em relay_hits (global).
       atualizarWidgetStatus();
 
       try {
