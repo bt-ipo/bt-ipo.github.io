@@ -405,8 +405,32 @@
   const ASF_MAX_TENTATIVAS = 3;          // Tentativas totais por matrícula (1 pedido + 2 repetições)
   const ASF_RETRY_EXTRA_MS = 6000;       // Espera extra antes de repetir (a cadência mínima de 8s continua a aplicar-se)
   // ===== RELAY PRÓPRIO (Supabase Edge Function) =====
-  const RELAY_URL = 'https://wltxdyrjlnznfjqwdmmz.supabase.co/functions/v1/asf-relay';                  // ex.: 'https://xxxxxxxx.supabase.co/functions/v1/asf-relay'
-  const RELAY_KEY = 'MItLjE0R8J51bYaHcZnBQGmhAd6ZrNOXoJu';                  // a mesma chave guardada no segredo RELAY_KEY da função
+  // TOKENS - única mudança: antes era 1 relay com 1 key fixa no código.
+  // Agora são 4 relays, sem nenhuma key neste ficheiro.
+  // Cada relay tem relay + gate. O gate emite token de 15 min, o relay verifica o token.
+  // Layout, limites, contagem, resto, tudo igual ao ficheiro bom.
+  const RELAYS = [
+    { nome: "1-Supabase-A", url: "https://umyphaswuanhnlxzbehq.supabase.co/functions/v1/asf-relay", gateUrl: "https://umyphaswuanhnlxzbehq.supabase.co/functions/v1/gate-v1" },
+    { nome: "2-Supabase-B", url: "https://bfxssbqzriyxrglzrhnj.supabase.co/functions/v1/asf-relay", gateUrl: "https://bfxssbqzriyxrglzrhnj.supabase.co/functions/v1/gate-v1" },
+    { nome: "3-Supabase-C1", url: "https://lbdxaxyovhpogojanmhs.supabase.co/functions/v1/asf-relay", gateUrl: "https://lbdxaxyovhpogojanmhs.supabase.co/functions/v1/gate-v1" },
+    { nome: "4-Supabase-C2", url: "https://wltxdyrjlnznfjqwdmmz.supabase.co/functions/v1/asf-relay", gateUrl: "https://wltxdyrjlnznfjqwdmmz.supabase.co/functions/v1/gate-v1" },
+  ];
+  let relayIndice = 0;
+  const TOKEN_CACHE = new Map();
+  async function obterToken(relay) {
+    const agora = Math.floor(Date.now() / 1000);
+    const cached = TOKEN_CACHE.get(relay.nome);
+    if (cached && cached.exp - agora > 60) return cached.token;
+    if (!relay.gateUrl || relay.gateUrl.startsWith("__URL")) throw new Error("Gate não configurado para " + relay.nome);
+    const res = await fetch(relay.gateUrl, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "asf-relay" }) });
+    if (!res.ok) throw new Error("Gate " + relay.nome + " devolveu " + res.status);
+    const j = await res.json();
+    if (!j.token) throw new Error("Gate " + relay.nome + " sem token");
+    TOKEN_CACHE.set(relay.nome, { token: j.token, exp: j.exp || agora + 900 });
+    return j.token;
+  }
+  // Compat: o resto do código antigo usava RELAY_URL / RELAY_KEY. Mantemos as variáveis vazias para não partir nada.
+  const RELAY_URL = ''; const RELAY_KEY = '';
   const RELAY_TIMEOUT_MS = 22000;        // o relay pode fazer mais do que uma tentativa à ASF
   const ASF_BACKOFF_BASE_MS = 1000;      // Base backoff exponencial (1s, 2s, 4s)
 
@@ -641,84 +665,68 @@ function obterIdInstalacao() {
     return id;
   } catch (e) { return ''; }
 }
-  // Pedido ao relay. Devolve null se o relay não deu uma resposta da ASF
-  // (inacessível, chave errada, projeto em pausa...), para a app cair no pedido direto.
+  // Pedido aos relays. Mesma assinatura e mesmo formato de retorno que antes.
+  // Antes: 1 relay com x-relay-key. Agora: 4 relays em round-robin com Authorization Bearer token.
+  // Se 1 der 429, tenta o próximo. Só devolve limite se todos disserem limite.
   async function efetuarPedidoRelay(matLimpa, dataHoje) {
-    const inicio=performance.now();
-    const corpo=JSON.stringify({matricula:matLimpa,date:dataHoje,installationId:obterIdInstalacao()});
-    try {
-      let status=0,text='',relayOk=false,tentativas='',asfMs='';
-      if(typeof ActiveXObject!=='undefined'){
-        const xhr=new ActiveXObject("WinHttp.WinHttpRequest.5.1");
-        xhr.open("POST",RELAY_URL,false);
-        xhr.setTimeouts(10000,10000,RELAY_TIMEOUT_MS,RELAY_TIMEOUT_MS);
-        xhr.setRequestHeader("Content-Type","application/json");
-        xhr.setRequestHeader("x-relay-key",RELAY_KEY);
-        xhr.send(corpo);
-        status=Number(xhr.Status||0);text=xhr.ResponseText||'';
-        relayOk=(xhr.GetResponseHeader('x-relay')||'')==='1';
-        tentativas=xhr.GetResponseHeader('x-relay-attempts')||'';asfMs=xhr.GetResponseHeader('x-relay-asf-ms')||'';
-      } else {
-        const controller=new AbortController();
-        const timeoutId=setTimeout(()=>controller.abort(),RELAY_TIMEOUT_MS);
-        try{
-          const res=await fetch(RELAY_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','x-relay-key':RELAY_KEY},body:corpo,signal:controller.signal});
-          text=await res.text();status=res.status;
-          relayOk=res.headers.get('x-relay')==='1';
-          tentativas=res.headers.get('x-relay-attempts')||'';asfMs=res.headers.get('x-relay-asf-ms')||'';
-        } finally { clearTimeout(timeoutId); }
+    const corpo = JSON.stringify({ matricula: matLimpa, date: dataHoje, installationId: obterIdInstalacao() });
+    const ordem = [];
+    for (let i = 0; i < RELAYS.length; i++) ordem.push(RELAYS[(relayIndice + i) % RELAYS.length]);
+    relayIndice = (relayIndice + 1) % RELAYS.length;
+    let menorRetryAfterMs = 0;
+    let algumTentou = false;
+    for (const relay of ordem) {
+      if (!relay.url || relay.url.startsWith("__URL")) continue;
+      if (!relay.gateUrl || relay.gateUrl.startsWith("__URL")) { diagAdicionar('ERROR', 'Falta o gate do relay ' + relay.nome, {}); continue; }
+      algumTentou = true;
+      const inicio = performance.now();
+      try {
+        let token = "";
+        try { token = await obterToken(relay); } catch (e) { diagAdicionar('WARN', 'Gate ' + relay.nome + ' falhou: ' + (e?.message || e), {}); continue; }
+        let status = 0, text = '', relayOk = false, tentativas = '', asfMs = '';
+        if (typeof ActiveXObject !== 'undefined') {
+          const xhr = new ActiveXObject("WinHttp.WinHttpRequest.5.1");
+          xhr.open("POST", relay.url, false);
+          xhr.setTimeouts(10000, 10000, RELAY_TIMEOUT_MS, RELAY_TIMEOUT_MS);
+          xhr.setRequestHeader("Content-Type", "application/json");
+          xhr.setRequestHeader("Authorization", "Bearer " + token);
+          xhr.send(corpo);
+          status = Number(xhr.Status || 0); text = xhr.ResponseText || '';
+          relayOk = (xhr.GetResponseHeader('x-relay') || '') === '1';
+          tentativas = xhr.GetResponseHeader('x-relay-attempts') || ''; asfMs = xhr.GetResponseHeader('x-relay-asf-ms') || '';
+        } else {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), RELAY_TIMEOUT_MS);
+          try {
+            const res = await fetch(relay.url, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: corpo, signal: controller.signal });
+            text = await res.text(); status = res.status;
+            relayOk = res.headers.get('x-relay') === '1';
+            tentativas = res.headers.get('x-relay-attempts') || ''; asfMs = res.headers.get('x-relay-asf-ms') || '';
+          } finally { clearTimeout(timeoutId); }
+        }
+        const duracao = Math.round(performance.now() - inicio);
+        if (status === 429 && !relayOk) {
+          let ra = 0; try { ra = Number(JSON.parse(text).retry_after_s) || 0; } catch (_) {}
+          const raMs = Math.max(1, ra) * 1000;
+          if (!menorRetryAfterMs || raMs < menorRetryAfterMs) menorRetryAfterMs = raMs;
+          diagAdicionar('WARN', 'Relay ' + relay.nome + ': limite de pedidos atingido, a tentar próximo.', { retryAfterS: ra, duracaoMs: duracao });
+          continue;
+        }
+        if (!relayOk) {
+          diagAdicionar('WARN', 'Relay ' + relay.nome + ' não devolveu resposta da ASF; a tentar próximo.', { status, duracaoMs: duracao });
+          continue;
+        }
+        diagAdicionar('INFO', 'Resposta da ASF recebida via relay ' + relay.nome + '.', { status, duracaoMs: duracao, tentativasRelay: tentativas, asfMs });
+        return { status, text, duracao, contentType: '', server: 'relay', relayNome: relay.nome };
+      } catch (err) {
+        diagAdicionar('WARN', 'Relay ' + relay.nome + ' inacessível; a tentar próximo.', { duracaoMs: Math.round(performance.now() - inicio), erro: err?.name || 'Erro', mensagem: err?.message || String(err) });
+        continue;
       }
-      const duracao=Math.round(performance.now()-inicio);
-     if(status===429 && !relayOk){
-  let ra=0; try{ ra=Number(JSON.parse(text).retry_after_s)||0; }catch(_){}
-  diagAdicionar('WARN','Relay: limite de pedidos atingido.',{retryAfterS:ra,duracaoMs:duracao});
-  return {limite:true,retryAfterMs:Math.max(1,ra)*1000};
-} 
-
-if(!relayOk){
-        diagAdicionar('WARN','Relay não devolveu resposta da ASF; a consultar a ASF diretamente.',{status,duracaoMs:duracao});
-        return null;
-      }
-      diagAdicionar('INFO','Resposta da ASF recebida via relay.',{status,duracaoMs:duracao,tentativasRelay:tentativas,asfMs});
-      return {status,text,duracao,contentType:'',server:'relay'};
-    } catch(err) {
-      diagAdicionar('WARN','Relay inacessível; a consultar a ASF diretamente.',{duracaoMs:Math.round(performance.now()-inicio),erro:err?.name||'Erro',mensagem:err?.message||String(err)});
-      return null;
     }
-  }
-
-  // Executa a requisição física HTTP/XHR com timeout.
-  async function efetuarPedidoHttpASF(url) {
-    const inicio=performance.now();
-    try {
-      if(typeof ActiveXObject!=='undefined'){
-        const xhr=new ActiveXObject("WinHttp.WinHttpRequest.5.1");
-        xhr.open("POST",url,false);
-        xhr.setTimeouts(10000,10000,ASF_TIMEOUT_MS,ASF_TIMEOUT_MS);
-        xhr.setRequestHeader("Accept","application/json, text/plain, */*");
-        xhr.send(null);
-        return {status:xhr.Status,text:xhr.ResponseText,duracao:Math.round(performance.now()-inicio),contentType:xhr.GetResponseHeader('Content-Type')||'',server:xhr.GetResponseHeader('Server')||''};
-      } else {
-        const controller=new AbortController();
-        const timeoutId=setTimeout(()=>controller.abort(),ASF_TIMEOUT_MS);
-        try{
-          const res=await fetch(url,{method:'POST',headers:{'Accept':'application/json, text/plain, */*'},signal:controller.signal});
-          const text=await res.text();
-          return {status:res.status,text,duracao:Math.round(performance.now()-inicio),contentType:res.headers.get('content-type')||'',server:res.headers.get('server')||''};
-        } finally { clearTimeout(timeoutId); }
-      }
-    } catch(err) {
-      const duracao=Math.round(performance.now()-inicio);
-      if(err?.name==='AbortError'){
-        diagnosticoASF.contadores.timeout++;diagnosticoASF.contadores.indisponivel++;
-        diagAdicionar('ERROR','Timeout na comunicação com a ASF.',{duracaoMs:duracao,timeoutMs:ASF_TIMEOUT_MS});
-      } else {
-        diagnosticoASF.contadores.rede++;diagnosticoASF.contadores.indisponivel++;
-        diagAdicionar('ERROR','Falha de rede/fetch na comunicação com a ASF.',{duracaoMs:duracao,erro:err?.name||'Erro',mensagem:err?.message||String(err)});
-      }
-      try { err.code = (err?.name === 'AbortError') ? 'TIMEOUT' : 'REDE'; } catch (_) {}
-      throw err;
-    }
+    if (!algumTentou) { diagAdicionar('ERROR', 'Nenhum relay configurado. Preenche os 4 URLs + 4 gates em RELAYS.', {}); return null; }
+    if (menorRetryAfterMs > 0) { diagAdicionar('WARN', 'Todos os relays em limite.', { retryAfterMs: menorRetryAfterMs }); return { limite: true, retryAfterMs: menorRetryAfterMs }; }
+    diagAdicionar('WARN', 'Todos os relays indisponíveis.', {});
+    return null;
   }
 
   // Consulta ASF e valida rigorosamente a resposta.
