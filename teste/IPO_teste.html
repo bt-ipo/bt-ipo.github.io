@@ -308,7 +308,7 @@
     }
   }
 
-  /* Modal styles */
+ /* Modal styles */
   .modal-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -325,16 +325,7 @@
     visibility: visible;
     opacity: 1;
   }
-  .modal-content {
-    background: white;
-    padding: 25px 30px 5px 30px;
-    border-radius: 8px;
-    max-width: 400px;
-    text-align: center;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-    box-sizing: border-box;
-  }
-  .modal-content h2 {
+.modal-content h2 {
     font-family: 'Georgia', serif;
     color: #3d63af;
     font-size: 24px;
@@ -342,28 +333,91 @@
     margin: 0 0 12px 0;
     text-transform: uppercase;
     letter-spacing: 1.5px;
+    text-align: center;
   }
-  .modal-content p {
-    font-family: 'Arial', sans-serif;
-    font-size: 16px;
-    color: #333;
-    line-height: 1.8;
-    margin: 0 0 10px 0;
-    font-style: italic;
-    text-align: justify;
+
+  /* Estilo Moderno do Modal e Atualizações */
+  .modal-content {
+    background: #ffffff;
+    padding: 28px 24px 14px 24px;
+    border-radius: 12px;
+    max-width: 420px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    box-sizing: border-box;
   }
-  .modal-content button {
-    padding: 8px 18px;
-    background-color: #3d63af;
-    border: none;
+
+  .modal-intro {
+    font-size: 14px !important;
+    color: #4a5568 !important;
+    font-style: normal !important;
+    text-align: center !important;
+    margin-bottom: 16px !important;
+  }
+
+  /* Bloco de Atualizações */
+  .modal-updates {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px;
+    margin: 15px 0 20px 0;
+    text-align: left;
+  }
+
+  .updates-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+
+  .modal-updates h3 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #00796b;
+    font-family: Arial, sans-serif;
+  }
+
+  .updates-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .update-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: #ffffff;
+    padding: 8px 10px;
     border-radius: 6px;
-    color: white;
-    font-weight: bold;
-    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }
-  .modal-content button:hover {
-    background-color: #0d1b60;
+
+  .update-badge {
+    font-size: 9px;
+    font-weight: 800;
+    background: #eef2ff;
+    color: #3d63af;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    margin-top: 1px;
   }
+
+  .update-text {
+    font-size: 12px;
+    color: #334155;
+    line-height: 1.4;
+    font-family: Arial, sans-serif;
+  }
+
   .modal-buttons {
     display: flex;
     justify-content: center;
@@ -391,6 +445,7 @@
     font-family: Arial, sans-serif;
     letter-spacing: 0.8px;
   }
+
 
 .diagnostic-panel{position:fixed;right:18px;bottom:18px;width:min(720px,calc(100vw - 36px));max-height:62vh;background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.35);z-index:50000;display:none;overflow:hidden;font-family:Consolas,"Courier New",monospace}
 .diagnostic-panel.active{display:flex;flex-direction:column}
@@ -967,11 +1022,44 @@ function obterIdInstalacao() {
 </head>
 <body>
   <div id="toastNotification" class="toast-notification">Matrícula copiada!</div>
+	<!-- POP UP -->
+<div id="popupModal" class="modal-overlay">
+    <div class="modal-content">
+      <h2>Bem-vindo!</h2>
+      <p class="modal-intro">Caro(a) utilizador(a), a aplicação encontra-se disponível exclusivamente através da intranet.</p>
+      
+      <div class="modal-updates">
+        <div class="updates-header">
+          <h3> Atualizações</h3>
+        </div>
+        <div class="updates-list">
+          <div class="update-item">
+            <span class="update-badge">*</span>
+            <span class="update-text">Botão de acesso direto às descrições SCOT</span>
+          </div>
+        </div>
+      </div>
 
-  <div id="popupModal" class="modal-overlay">
+      <div class="modal-buttons">
+        <button onclick="closeModal()">FECHAR</button>
+      </div>
+
+      <div class="modal-footer">
+        <p class="popup-name">Fábio Moço · GP2150375</p>
+      </div>
+    </div>
+  </div>
     <div class="modal-content">
       <h2>Bem-vindo!</h2>
       <p>Caro(a) utilizador(a), a aplicação encontra-se disponível exclusivamente através da intranet.</p>
+	<div class="modal-updates">
+        <h3>Atualizações</h3>
+        <ul>
+          <li>Adicionado botão de acesso direto às descriçoes SCOT.</li>
+          <li>Ajuste do zoom inicial na abertura do documento PDF.</li>
+        </ul>
+      </div>
+
       <div class="modal-buttons">
         <button onclick="closeModal()">FECHAR</button>
       </div>
@@ -980,6 +1068,7 @@ function obterIdInstalacao() {
       </div>
     </div>
   </div>
+
 
   <div class="form-container">
     
